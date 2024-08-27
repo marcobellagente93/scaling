@@ -19,7 +19,6 @@ from .test_training import execute_run_training
 @pytest.mark.parametrize("micro_batch_size,gradient_accumulation_steps", [(2, 1)])
 @pytest.mark.parametrize("enable_loss_scaling,precision", [(False, "float32")])
 @pytest.mark.parametrize("legacy_dataset", [True])
-@pytest.mark.parametrize("use_determined", [False])
 @pytest.mark.parametrize("weight_tying", [True])
 @pytest.mark.parametrize("use_separate_lr_on_embeddings", [False])
 @pytest.mark.parametrize("kernel", ["torch"])
@@ -34,7 +33,6 @@ def test_transformer_training_legacy(
     enable_loss_scaling: bool,
     precision: str,
     legacy_dataset: bool,
-    use_determined: bool,
     weight_tying: bool,
     use_separate_lr_on_embeddings: bool,
     kernel: str,
@@ -50,7 +48,6 @@ def test_transformer_training_legacy(
         enable_loss_scaling,
         precision,
         legacy_dataset,
-        use_determined,
         weight_tying,
         use_separate_lr_on_embeddings,
         kernel,

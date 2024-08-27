@@ -21,9 +21,7 @@ def test_is_in_rank_like_explicit_condition(ranks: Optional[list[int]], global_r
 def test_logger_init() -> None:
     logger.configure(LoggerConfig())
     normal_logger = repr(logger.info)
-    det_logger = repr(logger.info)
     logger.configure(LoggerConfig())
     normal_logger_2 = repr(logger.info)
-    assert det_logger != normal_logger
     assert "bound method Logger.info of <scaling.core.logging.logging.Logger" in normal_logger
     assert "bound method Logger.info of <scaling.core.logging.logging.Logger" in normal_logger_2
