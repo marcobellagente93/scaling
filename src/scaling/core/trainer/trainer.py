@@ -8,7 +8,7 @@ from typing import Any, Callable, Dict, Generic, List, Optional, Tuple, TypeVar,
 import torch
 
 from scaling.core.data import BaseDatasetBatchGeneric
-from scaling.core.logging import DeterminedLogger, logger
+from scaling.core.logging import logger
 from scaling.core.nn import ParallelSelfAttention
 from scaling.core.nn.parallel_module import (
     BaseLossInputGeneric,
@@ -17,7 +17,7 @@ from scaling.core.nn.parallel_module import (
 )
 from scaling.core.topology import Topology
 
-from ..context import BaseContext, DeterminedBaseContext
+from ..context import BaseContext
 from ..data import (
     BaseDataset,
     DataLoader,
@@ -286,7 +286,7 @@ class BaseTrainer(Generic[BaseContextGeneric, ParallelModuleGeneric]):
             # save checkpoint
             if (
                 self.config.save_interval is not None
-                and (self.config.save_dir is not None or isinstance(logger, DeterminedLogger))
+                and (self.config.save_dir is not None or isinstance(logger))
                 and self.context.iterations % self.config.save_interval == 0
             ):
                 self.save_checkpoint()
@@ -309,250 +309,3 @@ class BaseTrainer(Generic[BaseContextGeneric, ParallelModuleGeneric]):
             return metrics_list
         else:
             return None
-
-
-DeterminedBaseContextGeneric = TypeVar("DeterminedBaseContextGeneric", bound=DeterminedBaseContext)
-
-
-class DeterminedBaseTrainer(BaseTrainer[DeterminedBaseContextGeneric, ParallelModuleGeneric]):
-    def __init__(
-        self,
-        config: TrainerConfig,
-        context: DeterminedBaseContextGeneric,
-        parallel_module: ParallelModuleGeneric,
-        optimizer: BaseOptimizer,
-        dataset: Optional[BaseDataset],
-        sync_batch_to_model_parallel: Callable[[Topology, Optional[BaseDatasetBatchGeneric]], BaseDatasetBatchGeneric],
-        loss_function: Callable[
-            [
-                BaseLossInputGeneric,
-                Any,
-            ],  # TODO Any -> Optional[BaseDatasetBatchGeneric] or something
-            Union[torch.Tensor, Tuple[torch.Tensor, Dict[str, torch.Tensor]]],
-        ],
-        metrics_aggregation_fn: Optional[Callable] = None,
-        dataset_evaluation: Optional[BaseDataset] = None,
-    ) -> None:
-        super().__init__(
-            config=config,
-            context=context,
-            parallel_module=parallel_module,
-            optimizer=optimizer,
-            dataset=dataset,
-            sync_batch_to_model_parallel=sync_batch_to_model_parallel,
-            loss_function=loss_function,
-            metrics_aggregation_fn=metrics_aggregation_fn,
-            dataset_evaluation=dataset_evaluation,
-        )
-        if self.context.topology.config.global_rank == 0:
-            self.delete_preempted_checkpoints_determined()
-
-    def save_checkpoint(self, save_dir: Optional[Path] = None) -> Path:
-        if self.context._use_determined:
-            return self.determined_save_checkpoint()
-        else:
-            return super().save_checkpoint(save_dir=save_dir)
-
-    def determined_save_checkpoint(self) -> Path:
-        from determined.common import storage  # type: ignore
-
-        determined_context = self.context.determined_context
-        assert determined_context is not None, "tried to save Determined checkpoint but no determined context is given"
-        storage_manager = determined_context.checkpoint._storage_manager
-        if self.context.topology.config.global_rank == 0:
-            # Only run this once
-            metadata = {
-                "steps_completed": self.context.iterations,
-            }
-            storage_id = str(uuid.uuid4())
-            with storage_manager.store_path(storage_id) as path:
-                # Broadcast checkpoint path to all ranks.
-                determined_context.distributed.broadcast((storage_id, path))
-
-                super().save_checkpoint(save_dir=path)
-
-                # If the storage manager is a sharedfs, then the checkpoint directory
-                # will already contain all the files.  Otherwise, checkpoint files are
-                # saved to a local directory before being uploaded to cloud storage,
-                # so we'll need to gather all the files across nodes before reporting the
-                # checkpoint.
-                resources = storage.StorageManager._list_directory(path)
-                if isinstance(storage_manager, storage.SharedFSStorageManager):
-                    all_resources = [resources]
-                else:
-                    # Gather resources across nodes.
-                    all_resources = determined_context.distributed.gather(resources)  # type: ignore[assignment]
-            resources = {k: v for d in all_resources for k, v in d.items()}
-
-            determined_context.checkpoint._report_checkpoint(storage_id, resources, metadata)
-
-            if self.config.delete_past_optimizer_states:
-                self.delete_previous_optimizer_states_determined(storage_id)
-        else:
-            storage_id, path = determined_context.distributed.broadcast(None)
-            super().save_checkpoint(save_dir=path)
-            if not isinstance(storage_manager, storage.SharedFSStorageManager):
-                # Gather resources across nodes.
-                if determined_context.distributed.local_rank == 0:
-                    resources = storage.StorageManager._list_directory(path)
-                else:
-                    resources = {}
-                _ = determined_context.distributed.gather(resources)
-            if determined_context.distributed.local_rank == 0:
-                storage_manager.post_store_path(str(path), storage_id)
-
-        return path
-
-    def load_checkpoint(
-        self,
-        load_dir: Optional[Path] = None,
-        load_optimizer_states: bool = True,
-        load_context: bool = True,
-        allowed_missing_keys_in_checkpoint: Optional[List[str]] = None,
-        allowed_unexpected_keys_in_checkpoint: Optional[List[str]] = None,
-        ignore_keys_in_checkpoint: Optional[List[str]] = None,
-    ) -> bool:
-        continue_det_experiment = False
-        #  Check if a determined latest checkpoint is available
-        #  for example through pausing and resuming of an experiment
-        if self.context._use_determined:
-            import determined as det  # type: ignore
-
-            info = det.get_cluster_info()
-            if info is not None and info.latest_checkpoint is not None:
-                continue_det_experiment = True
-                assert self.context.determined_context is not None
-                with self.context.determined_context.checkpoint.restore_path(info.latest_checkpoint) as load_path:
-                    logger.info(
-                        f"Updating load checkpoint directory "
-                        f"from {self.config.load_dir} to {load_path} according to determined setting"
-                    )
-                    load_dir = Path(load_path)
-
-        return super().load_checkpoint(
-            load_dir=load_dir,
-            load_optimizer_states=load_optimizer_states or continue_det_experiment,
-            load_context=load_context or continue_det_experiment,
-            allowed_missing_keys_in_checkpoint=allowed_missing_keys_in_checkpoint,
-            allowed_unexpected_keys_in_checkpoint=allowed_unexpected_keys_in_checkpoint,
-            ignore_keys_in_checkpoint=ignore_keys_in_checkpoint,
-        )
-
-    def run_training(self, return_metrics: bool = False) -> Optional[List[Dict[str, Union[float, int]]]]:
-        metrics_list: List[Dict[str, Any]] = list()
-        while self.context.iterations < (self.config.train_iterations or 0):
-            # Determined profiling.
-            if self.context._use_determined and self.context.determined_profiler:
-                self.context.determined_profiler.update_batch_idx(self.context.iterations)
-
-            # model train step
-            train_step_output = self.train_step()
-            # check for preemption
-            if self.context._use_determined:
-                assert self.context.determined_context is not None
-                if self.context.determined_context.preempt.should_preempt():
-                    self.determined_save_checkpoint()
-                    print("exiting program after preemption.", flush=True)
-                    sys.exit()
-
-            # save checkpoint
-            if (
-                self.config.save_interval is not None
-                and (self.config.save_dir is not None or isinstance(logger, DeterminedLogger))
-                and self.context.iterations % self.config.save_interval == 0
-            ):
-                self.save_checkpoint()
-            # model eval step
-            if self.config.eval_interval is not None and self.context.iterations % self.config.eval_interval == 0:
-                eval_step_output = self.eval_step()
-            else:
-                eval_step_output = None
-            # log metrics
-            if self.context.topology.config.global_rank == 0:
-                metrics = self.log_metrics(
-                    train_step_output=train_step_output,
-                    eval_step_output=eval_step_output,
-                )
-
-                if return_metrics:
-                    metrics_list.append(metrics)
-
-        if return_metrics:
-            return metrics_list
-        else:
-            return None
-
-    def delete_preempted_checkpoints_determined(self) -> None:
-        if os.environ.get("DETERMINED_TEST", None) == "True":
-            return
-
-        try:
-            import determined as det
-            from determined.experimental import client
-
-            info = det.get_cluster_info()
-            assert info is not None
-            trial = client.get_trial(info.trial.trial_id)
-            checkpoints = trial.get_checkpoints(
-                sort_by=det.experimental.client.CheckpointSortBy.BATCH_NUMBER,
-                order_by=det.experimental.client.CheckpointOrderBy.ASC,
-            )
-
-            # Attempt to delete every thing that has not been saved intentionally
-            # except by the last step because we need this for resuming paused trainings.
-
-            for checkpoint in checkpoints[:-1]:
-                if checkpoint.metadata["steps_completed"] % self.config.save_interval != 0:
-                    logger.warning(
-                        f"Delete determined checkpoint {checkpoint.uuid} "
-                        f"at step: {checkpoint.metadata['steps_completed']} - "
-                        f"likely this checkpoint was saved during a preemption"
-                    )
-                    checkpoint.delete()
-
-        except Exception as ex:
-            logger.error(
-                f"deletion of previous determined preempted checkpoints failed, "
-                f"likely due to determined, will not delete anything: {ex}"
-            )
-
-    def delete_previous_optimizer_states_determined(self, latest_uuid: str) -> None:
-        # This function is not easily testable
-        if os.environ.get("DETERMINED_TEST", None) == "True":
-            return
-
-        if self.context.topology.config.global_rank != 0:
-            return
-
-        try:
-            import determined as det
-            from determined.common.experimental import checkpoint
-            from determined.experimental import client
-
-            info = det.get_cluster_info()
-            assert info is not None
-
-            # Use the determined API To get checkpoints
-            trial = client.get_trial(info.trial.trial_id)
-            # Get all checkpoint uuids EXCEPT the latest uuid we just saved
-            checkpoints_to_clean = [
-                ckpt
-                for ckpt in trial.get_checkpoints()
-                if ckpt.uuid != latest_uuid and ckpt.state == checkpoint.CheckpointState.COMPLETED
-            ]
-
-            for ckpt in checkpoints_to_clean:
-                logger.info(f"Requesting optimizer states deletion of ckpt {ckpt.uuid}")
-                ckpt.remove_files(["global_step*/*optimizer_state*pt"])
-
-        except Exception as ex:
-            logger.error(
-                f"deletion of previous optimizer states failed, "
-                f"likely due to determined, "
-                f"will not delete anything: {ex}"
-            )
-
-            # This will help us to debug some determined problems, and also is the entrypoint
-            # that most likely every research repo gets into.
-            det_variables = {k: v for k, v in os.environ.items() if k.startswith("DET_")}
-            logger.error(f"DET_ENV_VARS_AFTER_FAILURE: {det_variables}")

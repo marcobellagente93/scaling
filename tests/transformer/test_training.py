@@ -10,14 +10,11 @@ from scaling.core.runner.launch_config import LaunchConfig
 from scaling.core.utils.port import find_free_port
 from scaling.transformer.context import TransformerConfig
 from scaling.transformer.train import main
-from scaling.transformer.train_determined import main as main_determined
 
 from .utils import dist_launcher
-from .utils_determined import get_determined_context, make_mock_cluster_info
 
 
 @mock.patch("uuid.uuid4")
-@mock.patch("determined.get_cluster_info")
 def run_test_training(
     mock_cluster_info,
     mock_uuid,
@@ -29,22 +26,8 @@ def run_test_training(
     """
     function implementing the behavior of training for one single gpu / process
     """
-    if config_dict["runner"]["use_determined"]:
-        cluster_info = make_mock_cluster_info(_world_size, checkpoint_dir)
-        cluster_info._latest_checkpoint = os.environ.get("DET_LATEST_CHECKPOINT")
-        mock_cluster_info.return_value = cluster_info
-        mock_uuid.return_value = "determined_checkpoint"
-        with get_determined_context(checkpoint_dir) as determined_context:
-            metrics_list = main_determined(
-                determined_context,
-                None,
-                overwrite_config=config_dict,
-                return_metrics=True,
-                info=cluster_info,
-            )
-    else:
-        launch_config = LaunchConfig.from_launcher_args()
-        metrics_list = main(
+    launch_config = LaunchConfig.from_launcher_args()
+    metrics_list = main(
             launch_config=launch_config,
             overwrite_config=config_dict,
             return_metrics=True,
@@ -69,7 +52,6 @@ def run_test_training(
 @pytest.mark.parametrize("micro_batch_size,gradient_accumulation_steps", [(2, 1)])
 @pytest.mark.parametrize("enable_loss_scaling,precision", [(True, "float16"), (False, "float32")])
 @pytest.mark.parametrize("legacy_dataset", [False])
-@pytest.mark.parametrize("use_determined", [False])
 @pytest.mark.parametrize("weight_tying", [True, False])
 @pytest.mark.parametrize("use_separate_lr_on_embeddings", [True, False])
 @pytest.mark.parametrize("kernel", ["torch", "flash_attention"])
@@ -86,7 +68,6 @@ def test_transformer_training(
     enable_loss_scaling: bool,
     precision: str,
     legacy_dataset: bool,
-    use_determined: bool,
     weight_tying: bool,
     use_separate_lr_on_embeddings: bool,
     kernel: str,
@@ -118,7 +99,6 @@ def test_transformer_training(
         enable_loss_scaling,
         precision,
         legacy_dataset,
-        use_determined,
         weight_tying,
         use_separate_lr_on_embeddings,
         kernel,
@@ -143,7 +123,6 @@ def execute_run_training(
     enable_loss_scaling: bool,
     precision: str,
     legacy_dataset: bool,
-    use_determined: bool,
     weight_tying: bool,
     use_separate_lr_on_embeddings: bool,
     kernel: str,
@@ -165,7 +144,6 @@ def execute_run_training(
         pytest.skip("skip test because flash attention does not support float32")
 
     config_dict: Dict = {
-        "runner": {"use_determined": use_determined},
         "topology": {
             "world_size": world_size,
             "model_parallel_size": model_parallel_size,
@@ -262,10 +240,6 @@ def execute_run_training(
     # Resume model training from the previous checkpoint at 6 steps.
     # Train up to 10 steps after loading from checkpoint
     # Step 6 to 10 should have the same losses for both trainings
-    if use_determined:
-        determined_checkpoint_dir = str(Path(cache_dir) / "determined_checkpoint")
-        os.environ["DET_LATEST_CHECKPOINT"] = str(determined_checkpoint_dir)
-
     config_dict["trainer"]["assert_checkpoint_loaded"] = True
     config_loaded = TransformerConfig.from_dict(config_dict)
     return_dict_resumed_trained_model = dist_launcher(
@@ -311,7 +285,6 @@ def execute_run_training(
 @pytest.mark.parametrize("micro_batch_size,gradient_accumulation_steps", [(2, 1)])
 @pytest.mark.parametrize("enable_loss_scaling,precision", [(True, "float16")])
 @pytest.mark.parametrize("legacy_dataset", [True])
-@pytest.mark.parametrize("use_determined", [False])
 @pytest.mark.parametrize("weight_tying", [True])
 @pytest.mark.parametrize("use_separate_lr_on_embeddings", [True])
 def test_train_frozen_image_encoder(
@@ -324,7 +297,6 @@ def test_train_frozen_image_encoder(
     enable_loss_scaling: bool,
     precision: str,
     legacy_dataset: bool,
-    use_determined: bool,
     weight_tying: bool,
     use_separate_lr_on_embeddings: bool,
     norm_type: str = "layernorm",
@@ -346,7 +318,6 @@ def test_train_frozen_image_encoder(
         )
 
     config_dict: Dict = {
-        "runner": {"use_determined": use_determined},
         "topology": {
             "world_size": world_size,
             "model_parallel_size": model_parallel_size,
@@ -443,10 +414,6 @@ def test_train_frozen_image_encoder(
     # Resume model training from the previous checkpoint at 6 steps.
     # Train up to 10 steps after loading from checkpoint
     # Step 6 to 10 should have the same losses for both trainings
-    if use_determined:
-        determined_checkpoint_dir = str(Path(tmp_path) / "determined_checkpoint")
-        os.environ["DET_LATEST_CHECKPOINT"] = str(determined_checkpoint_dir)
-
     config_dict["trainer"]["assert_checkpoint_loaded"] = True
     config_loaded = TransformerConfig.from_dict(config_dict)
     return_dict_resumed_trained_model = dist_launcher(
@@ -476,25 +443,6 @@ def test_train_frozen_image_encoder(
         assert (date_log_dir / "profile.json").is_file(), "did not save profile information"
 
 
-def test_transformer_example_training_determined(tmp_path: Path):
-    test_transformer_training(
-        tmp_path=tmp_path,
-        model_parallel_size=1,
-        pipe_parallel_size=1,
-        sequence_parallel=False,
-        world_size=1,
-        micro_batch_size=2,
-        gradient_accumulation_steps=1,
-        enable_loss_scaling=False,
-        precision="bfloat16",
-        legacy_dataset=False,
-        use_determined=True,
-        weight_tying=False,
-        use_separate_lr_on_embeddings=False,
-        kernel="torch",
-    )
-
-
 def test_transformer_example_training_component_selection(tmp_path: Path):
     test_transformer_training(
         tmp_path=tmp_path,
@@ -507,7 +455,6 @@ def test_transformer_example_training_component_selection(tmp_path: Path):
         enable_loss_scaling=True,
         precision="float16",
         legacy_dataset=True,
-        use_determined=False,
         norm_type="rms",
         relative_position_embedding_type="rotary_complex",
         mlp_type="swiglu",
@@ -531,7 +478,6 @@ def test_cannot_train_without_any_trainable_parameter(
     enable_loss_scaling: bool = False,
     precision: str = "bfloat16",
     legacy_dataset: bool = True,
-    use_determined: bool = False,
     weight_tying: bool = True,
     use_separate_lr_on_embeddings: bool = False,
     norm_type: str = "layernorm",
@@ -558,7 +504,6 @@ def test_cannot_train_without_any_trainable_parameter(
         )
 
     config_dict: Dict = {
-        "runner": {"use_determined": use_determined},
         "topology": {
             "world_size": world_size,
             "model_parallel_size": model_parallel_size,
@@ -673,7 +618,6 @@ def test_load_checkpoint_for_finetuning(
     enable_loss_scaling: bool = False,
     precision: str = "bfloat16",
     legacy_dataset: bool = True,
-    use_determined: bool = False,
     weight_tying: bool = True,
     use_separate_lr_on_embeddings: bool = False,
     norm_type: str = "layernorm",
@@ -700,7 +644,6 @@ def test_load_checkpoint_for_finetuning(
         )
 
     config_dict: Dict = {
-        "runner": {"use_determined": use_determined},
         "topology": {
             "world_size": world_size,
             "model_parallel_size": model_parallel_size,
@@ -804,10 +747,6 @@ def test_load_checkpoint_for_finetuning(
     )
 
     # Finetune from the previous checkpoint
-    if use_determined:
-        determined_checkpoint_dir = str(Path(tmp_path) / "determined_checkpoint")
-        os.environ["DET_LATEST_CHECKPOINT"] = str(determined_checkpoint_dir)
-
     config_loaded = TransformerConfig.from_dict(
         config_dict,
         overwrite_values={
@@ -855,7 +794,6 @@ def test_train_with_deterministic_behaviour(tmp_path, use_deterministic_torch_al
         enable_loss_scaling=False,
         precision="bfloat16",
         legacy_dataset=False,
-        use_determined=True,
         weight_tying=False,
         use_separate_lr_on_embeddings=False,
         kernel="torch",

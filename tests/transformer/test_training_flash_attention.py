@@ -37,7 +37,6 @@ def test_flash_attention_training(
     precision: str,
     weight_tying: bool,
     legacy_dataset: bool = False,
-    use_determined: bool = False,
     use_separate_lr_on_embeddings: bool = False,
     norm_type: str = "layernorm",
     relative_position_embedding_type: str = "rotary",
@@ -63,7 +62,6 @@ def test_flash_attention_training(
         )
 
     config_dict: Dict = {
-        "runner": {"use_determined": use_determined},
         "topology": {
             "world_size": world_size,
             "model_parallel_size": model_parallel_size,
@@ -154,14 +152,6 @@ def test_flash_attention_training(
         _world_size=world_size,
     )
 
-    # Resume model training from the previous checkpoint at 6 steps.
-    # Train up to 10 steps after loading from checkpoint
-    # Step 6 to 10 should have the same losses for both trainings
-    if use_determined:
-        determined_checkpoint_dir = str(Path(tmp_path) / "determined_checkpoint")
-        os.environ["DET_LATEST_CHECKPOINT"] = str(determined_checkpoint_dir)
-
-    # config_dict["trainer"]["assert_checkpoint_loaded"] = True
     # Switch to use flash attention in second run
     config_dict["transformer_architecture"]["masked_softmax"] = {"kernel": "flash_attention"}
 

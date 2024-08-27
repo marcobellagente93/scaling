@@ -1,1 +1,1 @@
-from .trainer import BaseTrainer, DeterminedBaseTrainer, TrainerConfig
+from .trainer import BaseTrainer, TrainerConfig

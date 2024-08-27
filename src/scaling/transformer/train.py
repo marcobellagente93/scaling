@@ -8,7 +8,7 @@ import torch
 from scaling.core import (
     BaseBlendedDataset,
     BaseDataset,
-    DeterminedBaseTrainer,
+    BaseTrainer,
     Topology,
 )
 from scaling.core.logging import logger
@@ -39,18 +39,8 @@ from scaling.transformer.utils.get_tflops import (
     get_tflops_megatron,
 )
 
-try:
-    from determined.core._context import Context as DeterminedContext  # type: ignore
-    from determined.profiler import (
-        ProfilerAgent as DeterminedProfilerAgent,  # type: ignore
-    )
-except ImportError:
-    print("WARNING: determined not installed, skipping")
-    DeterminedContext = type(None)  # type: ignore
-    DeterminedProfilerAgent = type(None)  # type: ignore
 
-
-class TransformerTrainer(DeterminedBaseTrainer[TransformerContext, TransformerParallelModule]):
+class TransformerTrainer(BaseTrainer[TransformerContext, TransformerParallelModule]):
     def save_checkpoint(self, save_dir: Path | None = None) -> Path:
         save_dir = super().save_checkpoint(save_dir=save_dir)
         vocab_file = self.context.config.transformer_architecture.vocab_file
@@ -174,8 +164,6 @@ def main(
     launch_config: LaunchConfig,
     overwrite_config: dict[str, Any] | None = None,
     return_metrics: bool = False,
-    determined_context: DeterminedContext | None = None,
-    determined_profiler: DeterminedProfilerAgent | None = None,
 ) -> list[dict[str, Any]] | None:
     """
     Main function of the class. Runs training.
@@ -184,10 +172,10 @@ def main(
     config = _init_transformer_config(launch_config, overwrite_config)
     topology = Topology(config=config.topology)
 
-    _init_logger(config, determined_context, topology)
+    _init_logger(config, topology)
     if config.training.use_deterministic_torch_algorithms:
         _enable_deterministic_torch()
-    context = _init_transformer_context(config, determined_context, determined_profiler, launch_config, topology)
+    context = _init_transformer_context(config, launch_config, topology)
     model = init_model(context=context)
     optimizer = init_optimizer(context=context, model=model)
 
@@ -249,39 +237,20 @@ def _get_dataset_type(data_config: DataConfig) -> type[BaseBlendedDataset]:
 
 def _init_transformer_context(
     config: TransformerConfig,
-    determined_context: "DeterminedContext | None",
-    determined_profiler: "DeterminedProfilerAgent | None",
     launch_config: LaunchConfig,
     topology: Topology,
 ) -> TransformerContext:
     context = TransformerContext(config=config, topology=topology)
-    if determined_context is not None:
-        context.initialize_with_determined(
-            master_addr=launch_config.master_addr,
-            master_port=str(launch_config.master_port),
-            determined_context=determined_context,
-            determined_profiler=determined_profiler,
-            seed=config.trainer.seed,
-        )
-    else:
-        context.initialize(
-            master_addr=launch_config.master_addr,
-            master_port=str(launch_config.master_port),
-            seed=config.trainer.seed,
+    context.initialize(
+        master_addr=launch_config.master_addr,
+        master_port=str(launch_config.master_port),
+        seed=config.trainer.seed,
         )
     return context
 
 
-def _init_logger(config: TransformerConfig, determined_context: DeterminedContext | None, topology: Topology) -> None:
-    if config.runner.use_determined:
-        logger.configure_determined(
-            config=config.logger,
-            name=f"RANK {topology.config.global_rank}",
-            global_rank=topology.config.global_rank,
-            determined_context=determined_context,
-        )
-    else:
-        logger.configure(
+def _init_logger(config: TransformerConfig, topology: Topology) -> None:
+    logger.configure(
             config=config.logger, name=f"RANK {topology.config.global_rank}", global_rank=topology.config.global_rank
         )
     logger.log_config(config=config)

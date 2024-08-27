@@ -33,7 +33,6 @@ def test_sequence_parallel_training(
     precision: str,
     weight_tying: bool,
     legacy_dataset: bool = False,
-    use_determined: bool = False,
     use_separate_lr_on_embeddings: bool = False,
     norm_type: str = "layernorm",
     relative_position_embedding_type: str = "rotary",
@@ -59,7 +58,6 @@ def test_sequence_parallel_training(
         )
 
     config_dict: Dict = {
-        "runner": {"use_determined": use_determined},
         "topology": {
             "model_parallel_size": model_parallel_size,
             "pipe_parallel_size": pipe_parallel_size,
@@ -153,10 +151,6 @@ def test_sequence_parallel_training(
     # Resume model training from the previous checkpoint at 6 steps.
     # Train up to 10 steps after loading from checkpoint
     # Step 6 to 10 should have the same losses for both trainings
-    if use_determined:
-        determined_checkpoint_dir = str(Path(tmp_path) / "determined_checkpoint")
-        os.environ["DET_LATEST_CHECKPOINT"] = str(determined_checkpoint_dir)
-
     config_dict["trainer"]["assert_checkpoint_loaded"] = True
     # Switch to use sequence parallelism in second run
     config_dict["topology"]["sequence_parallel"] = True

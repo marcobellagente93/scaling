@@ -28,15 +28,6 @@ Known problems: If you see `Please add constraints for the package version liste
 
 Generate a personal access token from [here](https://gitlab.aleph-alpha.de/-/profile/personal_access_tokens).
 
-# Start a shell for debugging
-
-Assumption: have a clone of the aleph alpha scaling and transformer on scratch_2 with potential dirty changes or checked out on a branch.
-
-Change: determined_configs/example-shell-scaling.yml to reflect your mount (search for Hannah). Note that the resource pool 7gpu_pool is selected. Remove the line if no gpu is available in this pool or you need another. Potentially change the number of slots (gpus).
-
-Run:
-det shell start --config-file determined_configs/example-shell.yml --context . -d
-
 # Finetuning
 
 Make sure to set the following parameters
@@ -143,4 +134,4 @@ The latest version of the `aleph-alpha-scaling` library includes this trainer co
 
 ### Metrics logging
 
-Scaling supports metrics logging to weights and biases, determined (if started via the `src/transformer/train_determined.py` script), and tensorboard. For tensorboard in specific, this has caused multiple issues regarding writing to individual files for each step making it hard to back up data in pfss. Hence, we have now an additional environment variable `SCALING_ENABLE_TENSORBOARD`, and we only write tensorboard if this environment variable is set, **and** if the tensorboard flag is set to true on the logger.
+Scaling supports metrics logging to weights and biases, and tensorboard. For tensorboard in specific, this has caused multiple issues regarding writing to individual files for each step making it hard to back up data in pfss. Hence, we have now an additional environment variable `SCALING_ENABLE_TENSORBOARD`, and we only write tensorboard if this environment variable is set, **and** if the tensorboard flag is set to true on the logger.

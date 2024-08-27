@@ -413,16 +413,6 @@ class TransformerConfig(BaseConfig):
 
     data: DataConfig = Field(DataConfig(), description="")
 
-    determined_experiment_id: int | None = Field(
-        None,
-        description="determined experiment id, necessary to recover checkpoint paths",
-    )
-
-    determined_trial_id: int | None = Field(
-        None,
-        description="determined trial id, necessary to recover checkpoint paths",
-    )
-
     @classmethod
     def from_dict(cls, d: Mapping[str, Any], overwrite_values: dict | None = None) -> "TransformerConfig":
         # collect separate_file_for_parameters from finetunable parameters

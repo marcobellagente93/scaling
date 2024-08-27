@@ -18,7 +18,6 @@ requirements_base = (reqs_dir / "base.txt").read_text().splitlines()
 requirements_test = (reqs_dir / "test.txt").read_text().splitlines()
 
 requirements_optimization = (reqs_dir / "gpu_optimization.txt").read_text().splitlines()
-requirements_determined = (reqs_dir / "determined.txt").read_text().splitlines()
 
 setup(
     name="aleph-alpha-scaling",
@@ -30,7 +29,6 @@ setup(
     extras_require={
         "test": requirements_test,
         "gpu_optimization": requirements_optimization,
-        "determined": requirements_determined,
     },
     package_dir={"": "src"},
     packages=whitelisted_packages,

@@ -52,11 +52,6 @@ class LoggerConfig(BaseConfig):
         "If the list is omitted or None only rank 0 will write to tensorboard.",
     )
 
-    determined_metrics_ranks: Optional[List[int]] = Field(
-        None,
-        description="define the global ranks of process to write metrics to determined. "
-        "If the list is omitted or None only rank 0 will write to determined.",
-    )
 
     @model_validator(mode="before")
     def add_dates_to_values(cls, values: Dict[Any, Any]) -> Dict[Any, Any]:
@@ -93,9 +88,6 @@ class LoggerConfig(BaseConfig):
 
     def is_rank_in_metrics_ranks(self, rank: Optional[int]) -> bool:
         return _check_if_in_rank(rank, ranks=self.metrics_ranks)
-
-    def is_rank_in_determined_metrics_ranks(self, rank: Optional[int]) -> bool:
-        return _check_if_in_rank(rank, ranks=self.determined_metrics_ranks)
 
 
 def get_wandb_api_from_env() -> str | None:

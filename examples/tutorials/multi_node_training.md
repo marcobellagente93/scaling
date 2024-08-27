@@ -17,8 +17,8 @@ Generally, Scaling provides a [Pydantic](https://docs.pydantic.dev/latest/)-base
 For transformer training, we provide an [example configuration](/examples/transformer_example/config.yml).
 This configuration encompasses the following top-level keys:
 
-* `runner`: How to run the training. Concerns tooling such as pdsh, Docker, or determined.
-* `logger`: Where to send logs and metrics. Supports wandb, tensorboard, and determined.
+* `runner`: How to run the training. Concerns tooling such as pdsh, Docker.
+* `logger`: Where to send logs and metrics. Supports wandb, tensorboard.
 * `topology`: How to partition and distribute the model training on a cluster.
 * `optimizer`: Configure the optimizer, e.g. AdamW.
 * `learning_rate_scheduler`: Configure the learning rate, decay and warmup.

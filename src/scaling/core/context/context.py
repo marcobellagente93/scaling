@@ -8,14 +8,6 @@ import torch
 from scaling.core.config import BaseConfig
 from scaling.core.topology import Topology, TopologyState
 
-try:
-    from determined.core._context import Context as DeterminedContext  # type: ignore
-    from determined.profiler import ProfilerAgent as DeterminedProfilerAgent  # type: ignore
-except ImportError:
-    print("WARNING: determined not installed, skipping")
-    DeterminedContext = None  # type: ignore
-    DeterminedProfilerAgent = None  # type: ignore
-
 
 class ContextState(TypedDict):
     iterations: int
@@ -162,36 +154,3 @@ class BaseContext:
 
 
 BaseContextGeneric = TypeVar("BaseContextGeneric", bound=BaseContext)
-
-
-class DeterminedBaseContext(BaseContext):
-    def __init__(
-        self,
-        config: BaseConfig,
-        topology: Topology,
-    ) -> None:
-        super().__init__(config=config, topology=topology)
-        self.determined_context: Optional[DeterminedContext] = None  # type: ignore
-        self.determined_profiler: Optional[DeterminedProfilerAgent] = None  # type: ignore
-        self._use_determined = False
-
-    def initialize_with_determined(
-        self,
-        master_addr: str,
-        master_port: str,
-        determined_context: DeterminedContext,  # type: ignore
-        determined_profiler: Optional[DeterminedProfilerAgent],  # type: ignore
-        torch_distributed_timeout_minutes: int = 20,
-        seed: int = 42,
-        distributed: bool = True,
-    ) -> None:
-        super().initialize(
-            master_addr,
-            master_port,
-            torch_distributed_timeout_minutes,
-            seed,
-            distributed,
-        )
-        self.determined_context = determined_context
-        self.determined_profiler = determined_profiler
-        self._use_determined = True

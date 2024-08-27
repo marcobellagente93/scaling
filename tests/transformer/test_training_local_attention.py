@@ -54,7 +54,6 @@ def test_transformer_local_attention_training(
     print("cache_dir", tmp_path)
 
     config_dict: Dict = {
-        "runner": {"use_determined": False},
         "topology": {
             "world_size": world_size,
             "model_parallel_size": model_parallel_size,
@@ -146,9 +145,6 @@ def test_transformer_local_attention_training(
     # Resume model training from the previous checkpoint at 6 steps.
     # Train up to 10 steps after loading from checkpoint
     # Step 6 to 10 should have the same losses for both trainings
-    determined_checkpoint_dir = str(Path(tmp_path) / "determined_checkpoint")
-    os.environ["DET_LATEST_CHECKPOINT"] = str(determined_checkpoint_dir)
-
     config_dict["trainer"]["load_dir"] = str(tmp_path)
     config_dict["trainer"]["assert_checkpoint_loaded"] = True
     config_loaded = TransformerConfig.from_dict(config_dict)

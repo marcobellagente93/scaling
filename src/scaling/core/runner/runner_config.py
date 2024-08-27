@@ -66,8 +66,3 @@ class RunnerConfig(BaseConfig, populate_by_name=True):
         RunnerDockerConfig(),
         description="docker configuration in case using a docker runner type",
     )
-
-    use_determined: bool = Field(
-        False,
-        description="Flag indicating if determined is to be used for metric and checkpoint tracking.",
-    )

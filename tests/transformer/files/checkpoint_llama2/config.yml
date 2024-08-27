@@ -12,7 +12,6 @@
             "docker_sudo": false,
             "docker_mounts": null
         },
-        "use_determined": false
     },
     "logger": {
         "log_level": "info",
@@ -27,7 +26,6 @@
         "wandb_api_key": null,
         "use_tensorboard": false,
         "tensorboard_ranks": null,
-        "determined_metrics_ranks": null
     },
     "topology": {
         "global_rank": null,
@@ -170,6 +168,4 @@
             "shuffle_dataset_indices": false
         }
     },
-    "determined_experiment_id": null,
-    "determined_trial_id": null
 }

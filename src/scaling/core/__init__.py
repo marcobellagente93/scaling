@@ -1,5 +1,5 @@
 from .config import BaseConfig
-from .context import BaseContext, BaseContextGeneric, DeterminedBaseContext
+from .context import BaseContext, BaseContextGeneric
 from .data import (
     BaseBlendedDataset,
     BaseDataset,
@@ -68,4 +68,4 @@ from .runner import (
     runner_main,
 )
 from .topology import PipePartitionMethod, Topology, TopologyConfig
-from .trainer import BaseTrainer, DeterminedBaseTrainer, TrainerConfig
+from .trainer import BaseTrainer, TrainerConfig
