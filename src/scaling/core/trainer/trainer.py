@@ -286,7 +286,7 @@ class BaseTrainer(Generic[BaseContextGeneric, ParallelModuleGeneric]):
             # save checkpoint
             if (
                 self.config.save_interval is not None
-                and (self.config.save_dir is not None or isinstance(logger))
+                and self.config.save_dir is not None
                 and self.context.iterations % self.config.save_interval == 0
             ):
                 self.save_checkpoint()

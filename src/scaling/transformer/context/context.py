@@ -1,9 +1,9 @@
-from scaling.core import Topology
+from scaling.core import BaseContext, Topology
 
 from .config import TransformerConfig
 
 
-class TransformerContext:
+class TransformerContext(BaseContext):
     config: TransformerConfig
 
     def __init__(
