@@ -8,11 +8,8 @@ from typing import Any, Optional
 import wandb
 from torch.utils.tensorboard import SummaryWriter
 
-from .color_formatter import ColorFormatter
-
-import torch
-
 from ..config import BaseConfig
+from .color_formatter import ColorFormatter
 from .logger_config import LoggerConfig, LogLevel
 
 

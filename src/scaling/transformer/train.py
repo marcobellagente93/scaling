@@ -245,14 +245,14 @@ def _init_transformer_context(
         master_addr=launch_config.master_addr,
         master_port=str(launch_config.master_port),
         seed=config.trainer.seed,
-        )
+    )
     return context
 
 
 def _init_logger(config: TransformerConfig, topology: Topology) -> None:
     logger.configure(
-            config=config.logger, name=f"RANK {topology.config.global_rank}", global_rank=topology.config.global_rank
-        )
+        config=config.logger, name=f"RANK {topology.config.global_rank}", global_rank=topology.config.global_rank
+    )
     logger.log_config(config=config)
 
 

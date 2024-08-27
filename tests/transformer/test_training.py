@@ -1,4 +1,3 @@
-import os
 from pathlib import Path
 from typing import Dict
 from unittest import mock
@@ -28,10 +27,10 @@ def run_test_training(
     """
     launch_config = LaunchConfig.from_launcher_args()
     metrics_list = main(
-            launch_config=launch_config,
-            overwrite_config=config_dict,
-            return_metrics=True,
-        )
+        launch_config=launch_config,
+        overwrite_config=config_dict,
+        return_metrics=True,
+    )
 
     if config_dict["topology"]["global_rank"] == 0:
         assert metrics_list is not None

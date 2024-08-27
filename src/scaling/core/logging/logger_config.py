@@ -52,7 +52,6 @@ class LoggerConfig(BaseConfig):
         "If the list is omitted or None only rank 0 will write to tensorboard.",
     )
 
-
     @model_validator(mode="before")
     def add_dates_to_values(cls, values: Dict[Any, Any]) -> Dict[Any, Any]:
         log_dir = values.get("log_dir")
